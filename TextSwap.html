@@ -1,0 +1,1491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Invoice Editor - image invoice editor</title>
+<style>
+@font-face{font-family:'Invoice Sans';src:url('https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdHeFaxOedc.woff2') format('woff2');font-display:swap}
+@font-face{font-family:'Invoice Serif';src:url('https://fonts.gstatic.com/s/ibmplexserif/v19/ga6daw1J5X9T9RW6j9bNfFImajC-.woff2') format('woff2');font-display:swap}
+:root{
+  --bg:#0d1014; --panel:#141922; --panel2:#1b2230; --line:#242d3c; --line2:#31405a;
+  --text:#e7edf5; --muted:#8a96aa; --faint:#5d6a80;
+  --accent:#4da3ff; --accent-dk:#2b7cd6; --warn:#ffb020; --good:#3fbf7f; --danger:#ff5d5d;
+  --radius:9px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--text);
+  font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select{font:inherit;color:var(--text)}
+canvas{display:block}
+
+/* ---------- header ---------- */
+#topbar{
+  height:50px; flex:none; display:flex; align-items:center; gap:10px;
+  padding:0 14px; background:var(--panel); border-bottom:1px solid var(--line);
+}
+.brand{font-weight:700; font-size:15px; letter-spacing:.02em; margin-right:2px}
+.brand .tag{font-weight:400; color:var(--faint); font-size:11px; margin-left:8px; letter-spacing:.03em}
+#fileName{color:var(--faint); font-size:11px; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.sep{width:1px; height:22px; background:var(--line); margin:0 2px}
+.flex{flex:1}
+.btn{
+  background:var(--panel2); border:1px solid var(--line); border-radius:7px;
+  padding:6px 12px; font-size:12.5px; line-height:1.2; transition:background .12s,border-color .12s;
+  white-space:nowrap;
+}
+.btn:hover:not(:disabled){background:#232c3d; border-color:var(--line2)}
+.btn:disabled{opacity:.38; cursor:default}
+.btn.primary{background:var(--accent-dk); border-color:var(--accent-dk); color:#fff; font-weight:600}
+.btn.primary:hover:not(:disabled){background:var(--accent)}
+.btn.big{width:100%; padding:10px 12px; font-size:14px; margin-top:2px}
+.btn.mini{padding:2px 8px; font-size:11px; border-radius:5px}
+#zoomLabel{min-width:44px; text-align:center; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums}
+
+/* ---------- layout ---------- */
+#main{flex:1; display:flex; min-height:0}
+#stagewrap{
+  flex:1; min-width:0; overflow:auto; position:relative;
+  background:
+    radial-gradient(circle at 25% 15%, #11151c 0%, var(--bg) 55%),
+    var(--bg);
+  display:flex;
+}
+#stagewrap.dropping{outline:2px dashed var(--accent); outline-offset:-6px; background:#10161f}
+#stage{position:relative; margin:auto; flex:none}
+#cv,#ov{position:absolute; top:0; left:0; transform-origin:top left}
+#ov{cursor:crosshair; touch-action:none}
+#dropHint{
+  position:absolute; inset:0; display:flex; flex-direction:column; gap:8px;
+  align-items:center; justify-content:center; text-align:center; color:var(--muted);
+  pointer-events:none; padding:30px;
+}
+#dropHint b{color:var(--text); font-size:15px; font-weight:600}
+#dropHint .sub{font-size:12px; color:var(--faint)}
+#dropHint kbd{
+  background:var(--panel2); border:1px solid var(--line); border-radius:4px;
+  padding:1px 6px; font-size:11px; color:var(--text); font-family:inherit;
+}
+
+/* ---------- sidebar ---------- */
+#side{
+  width:352px; flex:none; background:var(--panel); border-left:1px solid var(--line);
+  overflow-y:auto; display:flex; flex-direction:column;
+}
+.step{padding:13px 16px 15px; border-bottom:1px solid var(--line); transition:opacity .15s}
+.step.last{border-bottom:none; margin-top:auto}
+.step h3{
+  font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.09em;
+  color:var(--muted); margin-bottom:10px; display:flex; align-items:center; gap:7px;
+}
+.step h3 .num{
+  background:var(--panel2); border:1px solid var(--line); color:var(--accent);
+  width:17px; height:17px; border-radius:50%; display:inline-flex; align-items:center;
+  justify-content:center; font-size:10px; flex:none;
+}
+.step.needs-sel.off{opacity:.4; pointer-events:none}
+.lab{display:block; font-size:11.5px; color:var(--muted); margin:9px 0 4px}
+.lab .val{color:var(--text); font-variant-numeric:tabular-nums}
+input[type=text],input[type=number],textarea,select{
+  width:100%; background:#0e131b; border:1px solid var(--line); border-radius:7px;
+  padding:6px 9px; font-size:12.5px; outline:none; transition:border-color .12s;
+}
+input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{resize:vertical;min-height:44px;line-height:1.35}
+input[type=number]{-moz-appearance:textfield}
+.row{display:flex; gap:8px; align-items:center}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.hint{font-size:11.5px; color:var(--faint); margin-top:8px; line-height:1.45}
+.hint.center{text-align:center}
+.hint b{color:var(--muted); font-weight:600}
+.chk{display:flex; align-items:flex-end; padding-bottom:6px}
+.chk label{display:flex; gap:6px; align-items:center; font-size:12px; color:var(--muted); cursor:pointer}
+
+/* segmented */
+.seg{display:flex; background:#0e131b; border:1px solid var(--line); border-radius:7px; overflow:hidden}
+.seg button{flex:1; padding:6px 0; font-size:12px; color:var(--muted); transition:background .1s}
+.seg button.on{background:var(--accent-dk); color:#fff; font-weight:600}
+.toolseg{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;background:#0e131b;border:1px solid var(--line);border-radius:7px;padding:4px}
+.toolseg button{padding:6px 4px;border-radius:5px;font-size:11.5px;color:var(--muted)}
+.toolseg button.on{background:var(--accent-dk);color:#fff;font-weight:600}
+
+/* colors */
+.swrow{display:flex; gap:10px; align-items:center; background:#0e131b; border:1px solid var(--line); border-radius:7px; padding:7px 9px}
+input[type=color]{
+  width:30px; height:30px; border:1px solid var(--line2); border-radius:6px;
+  background:none; padding:0; cursor:pointer; flex:none;
+}
+input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+input[type=color]::-webkit-color-swatch{border:none; border-radius:4px}
+.hexv{font-size:11px; color:var(--faint); font-variant-numeric:tabular-nums}
+
+/* ranges */
+input[type=range]{width:100%; accent-color:var(--accent); cursor:pointer}
+
+/* layers */
+.layer-list{display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto}
+.layer-row{display:flex;align-items:center;gap:7px;background:#0e131b;border:1px solid var(--line);border-radius:7px;padding:5px 7px}
+.layer-row.selected{border-color:var(--accent);background:#132238}
+.layer-row input{accent-color:var(--accent);flex:none}
+.layer-pick{flex:1;min-width:0;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11.5px}
+.layer-row.selected .layer-pick{color:var(--text)}
+.layer-empty{color:var(--faint);font-size:11.5px;padding:3px 0}
+.layer-row .layer-pick{cursor:pointer}
+.selection-mode{display:flex;align-items:center;justify-content:space-between;margin-top:8px;color:var(--muted);font-size:11.5px}
+.selection-mode label{display:flex;align-items:center;gap:6px}
+.preset-row{display:flex;gap:6px;margin-top:8px}
+.preset-row select{flex:1;min-width:0}
+
+/* match ranking */
+details{margin-top:9px}
+summary{font-size:11.5px; color:var(--muted); cursor:pointer; user-select:none}
+summary:hover{color:var(--text)}
+#matchRank{margin-top:6px; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+#matchRank div{display:flex; justify-content:space-between; gap:8px; padding:2px 0}
+#matchRank .fam{color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#matchRank .sc{color:var(--faint)}
+#matchRank .sc b{color:var(--good); font-weight:600}
+#matchRank div:first-child .fam{color:var(--accent)}
+
+/* toast */
+#toast{
+  position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(8px);
+  background:#1d2736; border:1px solid var(--line2); color:var(--text);
+  padding:9px 16px; border-radius:9px; font-size:12.5px; opacity:0; pointer-events:none;
+  transition:opacity .18s, transform .18s; max-width:70vw; box-shadow:0 8px 28px rgba(0,0,0,.45);
+  z-index:50;
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:var(--danger)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#232c3c; border-radius:6px; border:2px solid var(--panel)}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="brand">Invoice Editor<span class="tag">Python OCR · local</span></div>
+  <span id="fileName">no image</span>
+  <span class="flex"></span>
+  <button class="btn" id="btnOpen" title="Open an image or PDF invoice">Open image / PDF</button>
+  <input type="file" id="fileInput" accept="image/*,.pdf,application/pdf" style="position:absolute;width:1px;height:1px;opacity:0">
+  <button class="btn" id="btnDemo" title="Load a built-in sample receipt">Demo</button>
+  <span class="sep"></span>
+  <button class="btn" id="btnUndo" title="Undo (Cmd+Z)" disabled>Undo</button>
+  <button class="btn" id="btnRedo" title="Redo (Cmd+Shift+Z)" disabled>Redo</button>
+  <span class="sep"></span>
+  <button class="btn" id="btnZoomOut" title="Zoom out">&minus;</button>
+  <span id="zoomLabel">100%</span>
+  <button class="btn" id="btnZoomIn" title="Zoom in">+</button>
+  <button class="btn" id="btnFit" title="Fit image to window">Fit</button>
+  <button class="btn" id="btn100" title="Actual size">1:1</button>
+  <span class="sep"></span>
+  <button class="btn primary" id="btnExport" disabled title="Save as PNG (lossless)">Save PNG</button>
+  <button class="btn" id="btnExportJ" disabled title="Save as JPEG (quality 95)">Save JPEG</button>
+</header>
+
+<div id="main">
+  <div id="stagewrap">
+    <div id="stage" style="width:0;height:0">
+      <canvas id="cv"></canvas>
+      <canvas id="ov"></canvas>
+      <div id="dropHint">
+        <b>Drop an image or PDF here</b>
+        <div class="sub">or use <kbd>Open image / PDF</kbd>, paste with <kbd>Ctrl+V</kbd>, or try the <kbd>Demo</kbd></div>
+        <div class="sub">Run app.py to detect text and visual regions locally on this computer.</div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="side">
+
+    <section class="step">
+      <h3><span class="num">1</span> Select &amp; edit</h3>
+      <div class="row">
+        <button class="btn" id="detBtn" title="Use OCR and visual analysis to find text, buttons, and image regions">Detect text + objects</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="compareBtn" disabled>Compare original</button>
+        <button class="btn" id="exportJsonBtn" disabled>Export JSON</button>
+        <button class="btn" id="deleteBtn" disabled title="Delete selected layer">Delete</button>
+      </div>
+      <div class="selection-mode"><label><input type="checkbox" id="multiSelect"> Multi-select</label><label><input type="checkbox" id="snapToggle" checked> Snap guides</label></div>
+      <div class="preset-row"><select id="presetSelect"><option value="">Preset...</option></select><button class="btn" id="savePresetBtn">Save</button><button class="btn" id="loadPresetBtn">Load</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="batchBtn">Queue images</button><button class="btn" id="applyBatchBtn" disabled>Run batch</button><input type="file" id="batchInput" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></div>
+      <div class="hint" id="batchInfo">No batch images queued.</div>
+      <label class="lab" for="compareRange">Before / after <span class="val" id="compareVal">50%</span></label>
+      <input type="range" id="compareRange" min="0" max="100" value="50" disabled>
+      <label class="lab">Layers</label>
+      <div class="layer-list" id="layerList"><div class="layer-empty">Open an image to see layers.</div></div>
+      <div class="hint" id="detInfo">Open an image or PDF to detect text, buttons, and image regions. Text (blue), buttons (orange), images (green).</div>
+    </section>
+
+    <section class="step needs-sel off" id="stepTools">
+      <h3><span class="num">2</span> Canvas tools</h3>
+      <div class="toolseg" id="toolSeg">
+        <button data-tool="fill" class="on">Fill color</button>
+        <button data-tool="erase">Erase</button>
+        <button data-tool="image">Replace image</button>
+      </div>
+      <div id="fillControls">
+        <label class="lab" for="toolColor">Fill color</label>
+        <div class="swrow"><input type="color" id="toolColor" value="#292929"><div><div class="hexv" id="toolColorV">#292929</div></div></div>
+      </div>
+      <label class="lab" for="opacityRange">Opacity <span class="val" id="opacityVal">100%</span></label>
+      <input type="range" id="opacityRange" min="0" max="100" step="1" value="100">
+      <div id="imageControls" hidden>
+        <button class="btn" id="chooseReplace" style="width:100%">Choose replacement image</button>
+        <input type="file" id="replaceInput" accept="image/*" style="position:absolute;width:1px;height:1px;opacity:0">
+        <div class="hint" id="replaceInfo">The image is fitted inside the selected area.</div>
+      </div>
+      <button class="btn primary big" id="applyToolBtn">Apply canvas edit</button>
+      <div class="hint">Use this for button backgrounds, image backgrounds, logos, blocks, or anything else in the invoice. Every edit can be undone.</div>
+    </section>
+
+    <section class="step needs-sel off" id="step2">
+      <h3><span class="num">3</span> Text</h3>
+      <label class="lab" for="curText">Current text (exactly as printed)</label>
+      <textarea id="curText" placeholder="e.g. Anangfio" spellcheck="false" autocomplete="off" rows="2"></textarea>
+      <label class="lab" for="newText">Replacement text</label>
+      <textarea id="newText" placeholder="e.g. Bampoh" spellcheck="false" autocomplete="off" rows="2"></textarea>
+      <div class="hint">The current text is used to measure the original size and match the font. Numbers usually align right, names align left.</div>
+    </section>
+
+    <section class="step needs-sel off" id="step3">
+      <h3><span class="num">4</span> Font</h3>
+      <button class="btn" id="matchBtn" style="width:100%">Auto-match font</button>
+      <div class="hint" id="matchInfo">Type the current text, then auto-match.</div>
+      <details id="matchDetails" hidden><summary>Show top matches</summary><div id="matchRank"></div></details>
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label class="lab" for="fFamily" style="margin-top:0">Family</label>
+          <select id="fFamily"></select>
+        </div>
+        <div>
+          <label class="lab" for="fWeight" style="margin-top:0">Weight</label>
+          <select id="fWeight">
+            <option value="400">Regular</option>
+            <option value="500">Medium</option>
+            <option value="600">Semibold</option>
+            <option value="700" selected>Bold</option>
+            <option value="800">Heavy</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2">
+        <div>
+          <label class="lab" for="fSize">Size (px)</label>
+          <input type="number" id="fSize" min="4" max="500" step="0.5" value="32">
+        </div>
+        <div class="chk"><label><input type="checkbox" id="fItalic"> Italic</label></div>
+      </div>
+      <div class="grid2">
+        <div><label class="lab" for="letterSpacing">Tracking (px)</label><input type="number" id="letterSpacing" min="-10" max="20" step="0.1" value="0"></div>
+        <div><label class="lab" for="lineHeight">Line height</label><input type="number" id="lineHeight" min="0.8" max="3" step="0.05" value="1.2"></div>
+      </div>
+      <div class="hint">Auto-match compares the shape of your typed text against every candidate font and picks the closest.</div>
+    </section>
+
+    <section class="step needs-sel off" id="step4">
+      <h3><span class="num">5</span> Colors
+        <button class="btn mini" id="resampleBtn" style="margin-left:auto">Resample</button>
+      </h3>
+      <div class="grid2">
+        <div class="swrow">
+          <input type="color" id="colText" value="#ffffff">
+          <div><label class="lab" for="colText" style="margin:0">Text</label><div class="hexv" id="colTextV"></div></div>
+        </div>
+        <div class="swrow">
+          <input type="color" id="colBg" value="#292929">
+          <div><label class="lab" for="colBg" style="margin:0">Background</label><div class="hexv" id="colBgV"></div></div>
+        </div>
+      </div>
+      <div class="hint">Sampled automatically from the selected area. Fine-tune if needed.</div>
+    </section>
+
+    <section class="step needs-sel off" id="step5">
+      <h3><span class="num">6</span> Placement</h3>
+      <label class="lab">Align replacement to original</label>
+      <div class="seg" id="alignSeg">
+        <button data-align="left" class="on">Left</button>
+        <button data-align="center">Center</button>
+        <button data-align="right">Right</button>
+      </div>
+      <label class="lab">Erase padding <span class="val" id="padVal"></span></label>
+      <input type="range" id="padRange" min="0" max="14" step="1" value="6">
+      <div class="grid2" style="margin-top:4px">
+        <div>
+          <label class="lab">Nudge X <span class="val" id="dxVal"></span></label>
+          <input type="range" id="dxRange" min="-20" max="20" step="1" value="0">
+        </div>
+        <div>
+          <label class="lab">Nudge Y <span class="val" id="dyVal"></span></label>
+          <input type="range" id="dyRange" min="-20" max="20" step="1" value="0">
+        </div>
+      </div>
+      <label class="lab">Rotation <span class="val" id="rotationVal">0°</span></label>
+      <input type="range" id="rotationRange" min="-180" max="180" step="1" value="0">
+      <div class="hint">Padding grows the erased rectangle. Lower it if it eats a nearby line or border.</div>
+    </section>
+
+    <section class="step last needs-sel off" id="step6">
+      <button class="btn primary big" id="applyBtn">Apply edit</button>
+      <div class="hint center">The preview on the canvas is exactly what gets saved.</div>
+    </section>
+
+  </aside>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   TextSwap - detect text in a photo, match its font by shape, erase it
+   and redraw replacement text with correct color and baseline.
+
+   Pipeline (same as used for the original edit):
+   1. threshold (polarity auto) -> row projection -> text bands
+   2. word clustering by column gaps
+   3. selection -> tight ink bbox + median text/bg colors
+   4. font match: binary-search size on ink height, render at 4x,
+      downscale, compare against original ink (NCC + IoU with shifts)
+   5. redraw replacement at matched size, baseline + edge aligned
+===================================================================== */
+
+/* ---------------- state ---------------- */
+const S = {
+  name: 'image',
+  img: null, W: 0, H: 0, imgData: null,
+  zoom: 1,
+  boxes: [], sel: -1, selSet: [], selInk: null,
+  polarity: 1, thr: 170, bgLevel: 0,
+  curText: '', newText: '',
+  font: { family: 'Helvetica Neue', weight: 700, italic: false },
+  size: 32,
+  textCol: [255, 255, 255], bgCol: [41, 41, 41],
+  tool: 'fill', toolColor: [41, 41, 41], replaceImg: null, opacity: 1,
+  compare: false,
+  comparePos: 50,
+  multiSelect: false,
+  snap: true,
+  align: 'left', alignTouched: false,
+  pad: 6, dx: 0, dy: 0, rotation: 0, letterSpacing: 0, lineHeight: 1.2,
+  presets: {}, batchFiles: [],
+  matchInfo: null, ranking: [],
+  history: [], hIndex: -1,
+};
+
+const CANDIDATES = [
+  { family: 'Helvetica Neue', weight: 400 }, { family: 'Helvetica Neue', weight: 500 },
+  { family: 'Helvetica Neue', weight: 700 },
+  { family: 'Helvetica', weight: 400 }, { family: 'Helvetica', weight: 700 },
+  { family: 'Arial', weight: 400 }, { family: 'Arial', weight: 700 },
+  { family: 'Avenir Next', weight: 400 }, { family: 'Avenir Next', weight: 500 },
+  { family: 'Avenir Next', weight: 600 }, { family: 'Avenir Next', weight: 700 },
+  { family: 'system-ui', weight: 400 }, { family: 'system-ui', weight: 600 },
+  { family: 'Geneva', weight: 400 },
+  { family: 'Verdana', weight: 400 }, { family: 'Verdana', weight: 700 },
+  { family: 'Tahoma', weight: 400 },
+  { family: 'Menlo', weight: 400 },
+  { family: 'Times New Roman', weight: 400 }, { family: 'Times New Roman', weight: 700 },
+  { family: 'Georgia', weight: 400 }, { family: 'Georgia', weight: 700 },
+  { family: 'Courier New', weight: 400 }, { family: 'Courier New', weight: 700 },
+  { family: 'Invoice Sans', weight: 400 }, { family: 'Invoice Sans', weight: 700 },
+  { family: 'Invoice Serif', weight: 400 }, { family: 'Invoice Serif', weight: 700 },
+];
+const MANUAL_FAMILIES = [
+  'Helvetica Neue', 'Helvetica', 'Arial', 'Avenir Next', 'system-ui', 'Geneva',
+  'Verdana', 'Tahoma', 'Menlo', 'Monaco', 'Optima', 'Palatino', 'Baskerville',
+  'American Typewriter', 'Gill Sans', 'Futura', 'Didot', 'Times New Roman',
+  'Georgia', 'Courier New', 'Impact', 'Invoice Sans', 'Invoice Serif',
+];
+
+/* ---------------- dom ---------------- */
+const $ = id => document.getElementById(id);
+const cv = $('cv'), ov = $('ov');
+const mctx = cv.getContext('2d', { willReadFrequently: true });
+const octx = ov.getContext('2d');
+const measCtx = document.createElement('canvas').getContext('2d');
+const stagewrap = $('stagewrap'), stage = $('stage');
+let originalCanvas = null;
+
+/* ---------------- utils ---------------- */
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const rgbStr = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const toHex = c => '#' + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
+const fromHex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+let toastTimer = null;
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err show' : 'show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function medianFromHist(hist, total) {
+  if (!total) return 0;
+  let acc = 0;
+  const need = (total + 1) >> 1;
+  for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc >= need) return i; }
+  return 255;
+}
+function fontStr(f, size) {
+  return `${f.italic ? 'italic ' : ''}${f.weight} ${size}px "${f.family}"`;
+}
+
+function drawImageCover(ctx, img, b) {
+  const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+  const scale = Math.max(bw / img.width, bh / img.height);
+  const dw = img.width * scale, dh = img.height * scale;
+  ctx.drawImage(img, b.x0 + (bw - dw) / 2, b.y0 + (bh - dh) / 2, dw, dh);
+}
+
+/* ---------------- image loading ---------------- */
+function initImage(source, name) {
+  const W = source.width, H = source.height;
+  S.name = name || 'image';
+  S.W = W; S.H = H; S.img = source;
+  cv.width = W; cv.height = H;
+  ov.width = W; ov.height = H;
+  mctx.clearRect(0, 0, W, H);
+  mctx.drawImage(source, 0, 0);
+  S.imgData = mctx.getImageData(0, 0, W, H);
+  S.boxes = []; S.sel = -1; S.selSet = []; S.selInk = null;
+  S.history = [mctx.getImageData(0, 0, W, H)]; S.hIndex = 0;   // [0] = original
+  originalCanvas = document.createElement('canvas'); originalCanvas.width = W; originalCanvas.height = H;
+  originalCanvas.getContext('2d').putImageData(S.history[0], 0, 0);
+  S.compare = false;
+  S.comparePos = 50;
+  S.batchFiles = [];
+  S.curText = ''; S.newText = ''; S.matchInfo = null; S.ranking = [];
+  S.tool = 'fill'; S.toolColor = [41, 41, 41]; S.replaceImg = null;
+  $('fileName').textContent = S.name + '  ' + W + ' x ' + H;
+  $('dropHint').style.display = 'none';
+  $('btnExport').disabled = $('btnExportJ').disabled = false;
+  $('compareBtn').disabled = $('exportJsonBtn').disabled = false;
+  $('compareRange').disabled = false;
+  $('deleteBtn').disabled = true;
+  $('btnUndo').disabled = $('btnRedo').disabled = true;
+  updateSidebar();
+  fitZoom();
+  setTimeout(fitZoom, 150);   // re-fit once layout has settled
+  detect();
+  draw();
+}
+
+function loadFile(file) {
+  if (!file) return;
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+    $('detInfo').textContent = 'Opening PDF locally...';
+    file.arrayBuffer().then(async buffer => {
+      const response = await fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/pdf', 'X-File-Name': file.name },
+        body: buffer,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not open this PDF.');
+      const img = new Image();
+      img.onload = () => {
+        initImage(img, file.name.replace(/\.pdf$/i, ''));
+        if (result.notice) toast(result.notice);
+      };
+      img.onerror = () => toast('Could not render the first PDF page', true);
+      img.src = result.image;
+    }).catch(error => {
+      $('detInfo').textContent = error.message + ' Start the Python app with: python app.py';
+      toast(error.message, true);
+    });
+    return;
+  }
+  if (!file.type.startsWith('image/')) { toast('Choose an image or PDF file', true); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { initImage(img, file.name.replace(/\.[^.]+$/, '')); URL.revokeObjectURL(url); };
+  img.onerror = () => { toast('Could not read that image', true); URL.revokeObjectURL(url); };
+  img.src = url;
+}
+
+/* demo receipt drawn locally - fonts intentionally match candidates */
+function loadDemo() {
+  const W = 600, H = 880;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(41,41,41)'; x.fillRect(0, 0, W, H);
+  x.textBaseline = 'alphabetic';
+  // name
+  x.fillStyle = '#fff';
+  x.font = '700 64px "Helvetica Neue", Helvetica, Arial, sans-serif';
+  x.fillText('Anangfio', 63, 140);
+  // total row
+  x.font = '700 33px Helvetica, Arial, sans-serif';
+  const numW = x.measureText('79.91').width;
+  x.fillText('Total', 290, 460);
+  x.font = '700 20px Helvetica, Arial, sans-serif';
+  const ghsW = x.measureText('GHS').width;
+  x.fillText('GHS', 520 - numW - 8 - ghsW, 460);
+  x.font = '700 33px Helvetica, Arial, sans-serif';
+  x.fillText('79.91', 520 - numW, 460);
+  // dim separator (below threshold on purpose)
+  x.fillStyle = 'rgb(60,60,60)'; x.fillRect(40, 505, 520, 2);
+  // fare row
+  x.fillStyle = '#fefefe';
+  x.font = '700 17px Helvetica, Arial, sans-serif';
+  const farW = x.measureText('78.91').width;
+  x.fillText('Trip fare', 370, 560);
+  x.font = '700 12px Helvetica, Arial, sans-serif';
+  const ghsW2 = x.measureText('GHS').width;
+  x.fillText('GHS', 520 - farW - 8 - ghsW2, 560);
+  x.font = '700 17px Helvetica, Arial, sans-serif';
+  x.fillText('78.91', 520 - farW, 560);
+  // sub text (dim - not detected)
+  x.fillStyle = 'rgb(154,154,154)';
+  x.font = '400 15px "Helvetica Neue", Helvetica, Arial, sans-serif';
+  x.fillText('Thanks for riding with TextSwap', 63, 615);
+  // bright button block (dense - filtered on purpose)
+  x.fillStyle = 'rgb(217,232,255)'; x.fillRect(240, 645, 120, 40);
+  initImage(c, 'demo-receipt');
+  toast('Demo loaded - click any blue box to select it');
+}
+
+/* ---------------- zoom ---------------- */
+function applyZoom() {
+  const w = Math.max(1, Math.round(S.W * S.zoom)), h = Math.max(1, Math.round(S.H * S.zoom));
+  stage.style.width = w + 'px'; stage.style.height = h + 'px';
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  ov.style.width = w + 'px'; ov.style.height = h + 'px';
+  cv.style.imageRendering = S.zoom >= 2 ? 'pixelated' : 'auto';
+  $('zoomLabel').textContent = Math.round(S.zoom * 100) + '%';
+  draw();
+}
+function setZoom(z) { S.zoom = clamp(z, 0.05, 16); applyZoom(); }
+function fitZoom() {
+  const r = stagewrap.getBoundingClientRect();
+  let sw = r.width, sh = r.height;
+  if (sw < 60 || sh < 60) {
+    sw = Math.max(sw, window.innerWidth || 0);
+    sh = Math.max(sh, window.innerHeight || 0);
+  }
+  if (sw < 60) sw = 1100;
+  if (sh < 60) sh = 700;
+  S.zoom = clamp(Math.min((sw - 28) / S.W, (sh - 28) / S.H), 0.05, 8);
+  applyZoom();
+}
+
+/* ---------------- detection ---------------- */
+async function detect() {
+  if (!S.imgData) return 0;
+  const button = $('detBtn');
+  button.disabled = true;
+  $('detInfo').textContent = 'Scanning locally for text, buttons, and image regions...';
+  try {
+    const png = cv.toDataURL('image/png');
+    const image = png.length <= 48 * 1024 * 1024 ? png : cv.toDataURL('image/jpeg', 0.96);
+    const response = await fetch('/api/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Detection failed.');
+    S.boxes = result.regions.map(region => ({ ...region, density: 0, visible: true }));
+    S.sel = -1; S.selSet = []; S.selInk = null;
+    const counts = result.counts;
+    const total = result.regions.length;
+    $('detInfo').innerHTML = `<b>${total} regions</b>: ${counts.text} text, ${counts.button} buttons, ${counts.image} images, ${counts.graphic} other graphics.<br>Click a region to select it, or drag to add one.`;
+    S.polarity = result.polarity;
+    S.thr = result.threshold;
+    updateSidebar();
+    draw();
+    return total;
+  } catch (error) {
+    $('detInfo').textContent = `Detection failed: ${error.message} Start the Python app with: python app.py`;
+    toast(error.message, true);
+    return 0;
+  } finally {
+    button.disabled = false;
+  }
+}
+/* ---------------- selection analysis ---------------- */
+function analyzeSelection(keepColors) {
+  if (S.sel < 0 || !S.boxes[S.sel]) { S.selInk = null; return false; }
+  const b = S.boxes[S.sel];
+  const rw = b.x1 - b.x0, rh = b.y1 - b.y0;
+  if (rw < 2 || rh < 2) { S.selInk = null; return false; }
+  const reg = mctx.getImageData(b.x0, b.y0, rw, rh);
+  const d = reg.data;
+  const g = new Uint8Array(rw * rh);
+  for (let i = 0, j = 0; i < g.length; i++, j += 4)
+    g[i] = (d[j] * 77 + d[j + 1] * 151 + d[j + 2] * 28) >> 8;
+  const mask = new Uint8Array(rw * rh);
+  if (S.polarity > 0) for (let i = 0; i < g.length; i++) mask[i] = g[i] > S.thr ? 1 : 0;
+  else for (let i = 0; i < g.length; i++) mask[i] = g[i] < S.thr ? 1 : 0;
+
+  // tight ink bbox
+  let x0 = -1, y0 = -1, x1 = -1, y1 = -1;
+  for (let y = 0; y < rh; y++) {
+    const o = y * rw;
+    for (let xx = 0; xx < rw; xx++) if (mask[o + xx]) {
+      if (y0 < 0) y0 = y; y1 = y + 1;
+      if (x0 < 0 || xx < x0) x0 = xx;
+      if (xx + 1 > x1) x1 = xx + 1;
+    }
+  }
+  if (x0 < 0) { S.selInk = null; return false; }
+
+  // cropped polarity-normalised gray (text bright) + mask
+  const tw = x1 - x0, th = y1 - y0;
+  const gray = new Uint8Array(tw * th);
+  const cmask = new Uint8Array(tw * th);
+  for (let y = 0; y < th; y++) for (let xx = 0; xx < tw; xx++) {
+    const si = (y0 + y) * rw + (x0 + xx);
+    gray[y * tw + xx] = S.polarity > 0 ? g[si] : 255 - g[si];
+    cmask[y * tw + xx] = mask[si];
+  }
+
+  // median colors
+  if (!keepColors) {
+    const hi = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+    const hb = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+    let ni = 0, nb = 0;
+    for (let y = 0; y < rh; y++) for (let xx = 0; xx < rw; xx++) {
+      const p = (y * rw + xx) * 4;
+      if (mask[y * rw + xx]) { hi[0][d[p]]++; hi[1][d[p + 1]]++; hi[2][d[p + 2]]++; ni++; }
+      else { hb[0][d[p]]++; hb[1][d[p + 1]]++; hb[2][d[p + 2]]++; nb++; }
+    }
+    if (ni) S.textCol = [medianFromHist(hi[0], ni), medianFromHist(hi[1], ni), medianFromHist(hi[2], ni)];
+    if (nb) S.bgCol = [medianFromHist(hb[0], nb), medianFromHist(hb[1], nb), medianFromHist(hb[2], nb)];
+  }
+
+  S.selInk = {
+    x0: b.x0 + x0, y0: b.y0 + y0, x1: b.x0 + x1, y1: b.y0 + y1,
+    w: tw, h: th, gray, mask: cmask, rw, rh,
+  };
+  return true;
+}
+
+function setSelection(i) {
+  const changed = i !== S.sel;
+  if (i >= 0 && i < S.boxes.length) { S.sel = i; S.selSet = [i]; } else { S.sel = -1; S.selSet = []; }
+  S.alignTouched = false;
+  S.matchInfo = null; S.ranking = [];
+  if (changed) {
+    S.curText = S.sel >= 0 ? (S.boxes[S.sel].text || '') : '';
+    S.newText = '';
+    $('curText').value = S.curText;
+    $('newText').value = '';
+  }
+  const ok = analyzeSelection(false);
+  if (!ok && S.sel >= 0 && S.boxes[S.sel]) {
+    const b = S.boxes[S.sel];
+    S.selInk = { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, w: b.x1 - b.x0, h: b.y1 - b.y0 };
+  }
+  if (S.sel >= 0 && !ok) toast('No readable text in that area - try a different box', true);
+  if (ok && S.curText) autoAlignDefault();
+  updateSidebar();
+  draw();
+}
+
+function toggleSelection(i) {
+  if (!S.multiSelect) return setSelection(i);
+  const next = S.selSet.includes(i) ? S.selSet.filter(v => v !== i) : [...S.selSet, i];
+  S.selSet = next;
+  S.sel = next.length ? next[next.length - 1] : -1;
+  S.alignTouched = false; S.matchInfo = null; S.ranking = [];
+  S.curText = S.sel >= 0 ? (S.boxes[S.sel].text || '') : '';
+  S.newText = '';
+  $('curText').value = S.curText;
+  $('newText').value = '';
+  if (S.sel >= 0) analyzeSelection(false); else S.selInk = null;
+  updateSidebar(); draw();
+}
+
+function selectedIndexes() {
+  const list = S.selSet.length ? S.selSet : (S.sel >= 0 ? [S.sel] : []);
+  return [...new Set(list)].filter(i => i >= 0 && i < S.boxes.length && S.boxes[i].visible !== false);
+}
+
+function autoAlignDefault() {
+  if (S.alignTouched) return;
+  S.align = /^[\d.,:\s$₵€£+-]+$/.test(S.curText) ? 'right' : 'left';
+}
+
+/* ---------------- text rendering pipeline ---------------- */
+function downscale(c, factor) {
+  let cur = c, f = factor;
+  while (f > 1.001) {
+    const step = f >= 2 ? 2 : f;
+    const w = Math.max(1, Math.floor(cur.width / step));
+    const h = Math.max(1, Math.floor(cur.height / step));
+    const nc = document.createElement('canvas'); nc.width = w; nc.height = h;
+    const nx = nc.getContext('2d');
+    nx.imageSmoothingEnabled = true; nx.imageSmoothingQuality = 'high';
+    nx.drawImage(cur, 0, 0, w, h);
+    cur = nc; f /= step;
+  }
+  return cur;
+}
+
+/* render word -> tight-cropped 1x canvas.
+   mode 'mask'  : white on black, grayscale kept (for matching)
+   mode 'color' : textCol on transparent (for compositing) */
+function renderPipeline(word, f, size, mode) {
+  if (!word) return null;
+  const ss = 4;
+  const lines = String(word).split(/\r?\n/);
+  const spacing = Number.isFinite(f.letterSpacing) ? f.letterSpacing : S.letterSpacing;
+  const lineGap = size * (Number.isFinite(f.lineHeight) ? f.lineHeight : S.lineHeight);
+  measCtx.font = fontStr(f, size);
+  const metrics = lines.map(line => {
+    const tm = measCtx.measureText(line || ' ');
+    let width = 0;
+    for (const ch of line) width += measCtx.measureText(ch).width;
+    width += Math.max(0, line.length - 1) * spacing;
+    return { tm, width };
+  });
+  const asc = Math.max(...metrics.map(m => m.tm.actualBoundingBoxAscent || size));
+  const desc = Math.max(...metrics.map(m => m.tm.actualBoundingBoxDescent || size * 0.25));
+  const width = Math.max(...metrics.map(m => m.width));
+  const w1 = Math.max(4, Math.ceil(width) + 10);
+  const h1 = Math.max(4, Math.ceil(asc + desc + (lines.length - 1) * lineGap) + 10);
+  const baseY1 = Math.ceil(asc) + 4;
+  const leftX1 = 4;
+
+  const c4 = document.createElement('canvas');
+  c4.width = w1 * ss; c4.height = h1 * ss;
+  const x4 = c4.getContext('2d');
+  x4.font = fontStr(f, size * ss);
+  x4.textBaseline = 'alphabetic';
+  if (mode === 'color') x4.fillStyle = rgbStr(S.textCol);
+  else { x4.fillStyle = '#000'; x4.fillRect(0, 0, c4.width, c4.height); x4.fillStyle = '#fff'; }
+  x4.font = fontStr(f, size * ss);
+  lines.forEach((line, lineIndex) => {
+    const y = (baseY1 + lineIndex * lineGap) * ss;
+    if (!spacing) x4.fillText(line, leftX1 * ss, y);
+    else {
+      let x = leftX1 * ss;
+      for (const ch of line) { x4.fillText(ch, x, y); x += x4.measureText(ch).width + spacing * ss; }
+    }
+  });
+
+  const c1 = downscale(c4, ss);   // 1x, same geometry (ss is a power of 2)
+  const px = c1.getContext('2d').getImageData(0, 0, c1.width, c1.height).data;
+  const ch = mode === 'color' ? 3 : 0;   // alpha channel vs red channel
+  let x0 = -1, y0 = -1, x1 = -1, y1 = -1;
+  for (let y = 0; y < c1.height; y++) {
+    const o = y * c1.width;
+    for (let xx = 0; xx < c1.width; xx++) if (px[(o + xx) * 4 + ch] > 128) {
+      if (y0 < 0) y0 = y; y1 = y + 1;
+      if (x0 < 0 || xx < x0) x0 = xx;
+      if (xx + 1 > x1) x1 = xx + 1;
+    }
+  }
+  if (x0 < 0) return null;
+  const w = x1 - x0, h = y1 - y0;
+  const cc = document.createElement('canvas'); cc.width = w; cc.height = h;
+  cc.getContext('2d').drawImage(c1, x0, y0, w, h, 0, 0, w, h);
+  const out = { c: cc, w, h, baselineFromTop: baseY1 - y0, lines: lines.length };
+  if (mode === 'mask') {
+    const dd = cc.getContext('2d').getImageData(0, 0, w, h).data;
+    out.gray = new Uint8Array(w * h); out.mask = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) { out.gray[i] = dd[i * 4]; out.mask[i] = dd[i * 4] > 128 ? 1 : 0; }
+  }
+  return out;
+}
+
+/* ---------------- shape comparison (NCC + IoU, shift search) ---------------- */
+function comparePatches(o, r) {
+  const pad = 3;
+  const W = Math.max(o.w, r.w) + 2 * pad + 2;
+  const H = Math.max(o.h, r.h) + 2 * pad + 2;
+  const N = W * H;
+  const oa = new Float64Array(N), om = new Uint8Array(N);
+  for (let y = 0; y < o.h; y++) {
+    const sRow = y * o.w, dRow = (y + pad) * W + pad;
+    for (let xx = 0; xx < o.w; xx++) { const si = sRow + xx; oa[dRow + xx] = o.gray[si]; om[dRow + xx] = o.mask[si]; }
+  }
+  let sa = 0, saa = 0;
+  for (let i = 0; i < N; i++) { const v = oa[i]; sa += v; saa += v * v; }
+  const denomO = Math.sqrt(N * saa - sa * sa);
+
+  let bestNcc = -2, bestIou = 0, iouAtBest = 0, bdx = 0, bdy = 0;
+  for (let dy = -pad; dy <= pad; dy++) for (let dx = -pad; dx <= pad; dx++) {
+    let sb = 0, sbb = 0, sab = 0, inter = 0, uni = 0;
+    for (let y = 0; y < r.h; y++) {
+      const sRow = y * r.w, dRow = (y + pad + dy) * W + (pad + dx);
+      for (let xx = 0; xx < r.w; xx++) {
+        const rv = r.gray[sRow + xx], rm = r.mask[sRow + xx];
+        const di = dRow + xx, ovv = oa[di], omv = om[di];
+        sb += rv; sbb += rv * rv; sab += rv * ovv;
+        uni += omv | rm; inter += omv & rm;
+      }
+    }
+    const denomR = Math.sqrt(N * sbb - sb * sb);
+    const ncc = (denomO > 1e-6 && denomR > 1e-6) ? (N * sab - sa * sb) / (denomO * denomR) : 0;
+    const iou = uni ? inter / uni : 0;
+    if (ncc > bestNcc) { bestNcc = ncc; iouAtBest = iou; bdx = dx; bdy = dy; }
+    if (iou > bestIou) bestIou = iou;
+  }
+  return { ncc: bestNcc, iou: bestIou, iouAtNcc: iouAtBest, dx: bdx, dy: bdy };
+}
+
+function scalePatch(p, k) {
+  const c = document.createElement('canvas'); c.width = p.w; c.height = p.h;
+  const x = c.getContext('2d');
+  const id = x.createImageData(p.w, p.h);
+  for (let i = 0; i < p.w * p.h; i++) { const v = p.gray[i]; id.data[i * 4] = v; id.data[i * 4 + 1] = v; id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+  x.putImageData(id, 0, 0);
+  const c2 = document.createElement('canvas');
+  c2.width = Math.max(1, Math.round(p.w / k)); c2.height = Math.max(1, Math.round(p.h / k));
+  const x2 = c2.getContext('2d');
+  x2.imageSmoothingEnabled = true; x2.imageSmoothingQuality = 'high';
+  x2.drawImage(c, 0, 0, c2.width, c2.height);
+  const dd = x2.getImageData(0, 0, c2.width, c2.height).data;
+  const w = c2.width, h = c2.height;
+  const gray = new Uint8Array(w * h), mask = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) { gray[i] = dd[i * 4]; mask[i] = dd[i * 4] > 128 ? 1 : 0; }
+  return { w, h, gray, mask };
+}
+
+/* ---------------- font auto-match ---------------- */
+function measureH(word, f, size) {
+  measCtx.font = fontStr(f, size);
+  const m = measCtx.measureText(word);
+  return (m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0);
+}
+
+async function autoMatch() {
+  if (!S.selInk) { toast('Select a text region first', true); return null; }
+  if (!S.curText) { toast('Type the current text first (step 2)', true); return null; }
+  const o = S.selInk;
+  const btn = $('matchBtn');
+  const results = [];
+  const bigP = o.w * o.h > 40000;
+
+  for (let ci = 0; ci < CANDIDATES.length; ci++) {
+    const cand = CANDIDATES[ci];
+    // binary search size so rendered ink height matches original
+    let lo = 4, hi = 500;
+    const target = o.h + 1;    // metric height ~ pixel height + ~1px AA
+    while (hi - lo > 0.3) {
+      const mid = (lo + hi) / 2;
+      if (measureH(S.curText, { family: cand.family, weight: cand.weight, italic: false }, mid) < target) lo = mid; else hi = mid;
+    }
+    let size = (lo + hi) / 2;
+    let r = renderPipeline(S.curText, cand, size, 'mask');
+    if (r && Math.abs(r.h - o.h) > 0.75 && r.h > 0) {   // fine tune on real pixels
+      size = size * o.h / r.h;
+      r = renderPipeline(S.curText, cand, size, 'mask');
+    }
+    if (!r) continue;
+    let cmp = comparePatches(o, r);
+    if (bigP) cmp = comparePatches(scalePatch(o, 2), scalePatch(r, 2));
+    results.push({
+      family: cand.family, weight: cand.weight, italic: false,
+      size, score: cmp.ncc, iou: cmp.iou, iouAtNcc: cmp.iouAtNcc,
+      desc: r.h - r.baselineFromTop, inkW: r.w,
+    });
+    if (ci % 4 === 3) {
+      btn.textContent = `Matching ${ci + 1}/${CANDIDATES.length}`;
+      await new Promise(rs => setTimeout(rs, 0));
+    }
+  }
+  btn.textContent = 'Auto-match font';
+  if (!results.length) { toast('Font matching failed', true); return null; }
+  results.sort((a, b) => b.score - a.score);
+  const best = results[0];
+  S.font = { family: best.family, weight: best.weight, italic: false };
+  S.size = Math.round(best.size * 2) / 2;
+  S.matchInfo = best; S.ranking = results.slice(0, 6);
+  const wn = { 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold', 800: 'Heavy' };
+  $('matchInfo').innerHTML =
+    `<b>${best.family} ${wn[best.weight] || best.weight}</b> - size ${S.size}px - shape match ${(Math.max(0, best.score) * 100).toFixed(0)}%` +
+    (best.score < 0.45 ? '<br>Weak match - try typing the text more carefully or adjust manually.' : '');
+  const rk = $('matchRank');
+  rk.innerHTML = S.ranking.map((m, i) =>
+    `<div><span class="fam">${i + 1}. ${m.family} ${wn[m.weight] || m.weight}</span>` +
+    `<span class="sc">ncc <b>${Math.max(0, m.score).toFixed(2)}</b> iou ${m.iou.toFixed(2)}</span></div>`).join('');
+  $('matchDetails').hidden = false;
+  updateSidebar();
+  draw();
+  return best;
+}
+
+/* ---------------- placement ---------------- */
+function computePlacement() {
+  if (S.sel < 0 || !S.selInk || !S.newText) return null;
+  const ink = S.selInk;
+  const f = { ...S.font, letterSpacing: S.letterSpacing, lineHeight: S.lineHeight }, size = S.size;
+  const r = renderPipeline(S.newText, f, size, 'color');
+  if (!r) return null;
+  // descender depth of the ORIGINAL word at this font/size -> baseline
+  let desc = 0;
+  if (S.curText) {
+    const cr = renderPipeline(S.curText, f, size, 'mask');
+    if (cr) desc = cr.h - cr.baselineFromTop;
+  }
+  const baseline = ink.y1 - desc;
+  let x;
+  if (S.align === 'left') x = ink.x0;
+  else if (S.align === 'right') x = ink.x1 - r.w;
+  else x = Math.round(ink.x0 + (ink.w - r.w) / 2);
+  let y = baseline - r.baselineFromTop;
+  x = Math.round(x + S.dx); y = Math.round(y + S.dy);
+  const p = S.pad;
+  const erase = {
+    x: Math.max(0, ink.x0 - p), y: Math.max(0, ink.y0 - p),
+    x2: Math.min(S.W, ink.x1 + p), y2: Math.min(S.H, ink.y1 + p),
+  };
+  return { erase, x, y, canvas: r.c, w: r.w, h: r.h, baseline, rotation: S.rotation };
+}
+
+function drawRotated(ctx, canvas, x, y, rotation, cx, cy) {
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(rotation * Math.PI / 180); ctx.translate(-cx, -cy);
+  ctx.drawImage(canvas, x, y);
+  ctx.restore();
+}
+
+function fillRotated(ctx, color, box, rotation, alpha) {
+  const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.translate(cx, cy); ctx.rotate(rotation * Math.PI / 180); ctx.translate(-cx, -cy);
+  ctx.fillStyle = rgbStr(color); ctx.fillRect(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
+  ctx.restore();
+}
+
+/* ---------------- overlay drawing ---------------- */
+function draw() {
+  if (!S.img) return;
+  const z = S.zoom;
+  octx.clearRect(0, 0, S.W, S.H);
+
+  if (S.compare && originalCanvas) {
+    const split = S.W * S.comparePos / 100;
+    octx.save(); octx.beginPath(); octx.rect(0, 0, split, S.H); octx.clip();
+    octx.drawImage(originalCanvas, 0, 0); octx.restore();
+    octx.strokeStyle = '#ffffff'; octx.lineWidth = clamp(1 / z, 0.5, 3);
+    octx.beginPath(); octx.moveTo(split, 0); octx.lineTo(split, S.H); octx.stroke();
+  }
+
+  // live preview of the edit
+  const p = (S.sel >= 0 && S.boxes[S.sel] && S.boxes[S.sel].visible !== false && S.newText) ? computePlacement() : null;
+  if (p) {
+    octx.save(); octx.globalAlpha = S.opacity;
+    octx.fillStyle = rgbStr(S.bgCol);
+    octx.fillRect(p.erase.x, p.erase.y, p.erase.x2 - p.erase.x, p.erase.y2 - p.erase.y);
+    drawRotated(octx, p.canvas, p.x, p.y, p.rotation, (p.erase.x + p.erase.x2) / 2, (p.erase.y + p.erase.y2) / 2);
+    octx.restore();
+  }
+
+  // live preview for non-text canvas tools
+  const tb = S.sel >= 0 && S.boxes[S.sel] && S.boxes[S.sel].visible !== false ? S.boxes[S.sel] : null;
+  if (tb && S.tool === 'fill') {
+    octx.save();
+    fillRotated(octx, S.toolColor, tb, S.rotation, S.opacity);
+    octx.restore();
+  } else if (tb && S.tool === 'erase') {
+    octx.save();
+    fillRotated(octx, S.bgCol, tb, S.rotation, S.opacity);
+    octx.restore();
+  } else if (tb && S.tool === 'image' && S.replaceImg) {
+    octx.save(); octx.globalAlpha = S.opacity;
+    const cx = (tb.x0 + tb.x1) / 2, cy = (tb.y0 + tb.y1) / 2;
+    octx.translate(cx, cy); octx.rotate(S.rotation * Math.PI / 180); octx.translate(-cx, -cy);
+    drawImageCover(octx, S.replaceImg, tb); octx.restore();
+  }
+
+  // detection boxes
+  const lw = clamp(1 / z, 0.4, 4);
+  for (let i = 0; i < S.boxes.length; i++) {
+    if (S.boxes[i].visible === false) continue;
+    if (i === S.sel) continue;
+    const b = S.boxes[i];
+    octx.strokeStyle = b.type === 'button' ? 'rgba(255,176,32,0.85)'
+      : b.type === 'image' ? 'rgba(63,191,127,0.85)' : 'rgba(77,163,255,0.75)';
+    octx.lineWidth = lw;
+    octx.strokeRect(b.x0 + lw / 2, b.y0 + lw / 2, b.x1 - b.x0 - lw, b.y1 - b.y0 - lw);
+  }
+  for (const index of S.selSet.length ? S.selSet : (S.sel >= 0 ? [S.sel] : [])) {
+    const b = S.boxes[index];
+    if (!b || b.visible === false) continue;
+    octx.strokeStyle = index === S.sel ? '#ffb020' : '#f0c36b';
+    octx.lineWidth = index === S.sel ? lw * 1.7 : lw * 1.2;
+    octx.strokeRect(b.x0 + lw, b.y0 + lw, b.x1 - b.x0 - 2 * lw, b.y1 - b.y0 - 2 * lw);
+  }
+  if (dragRect) {
+    octx.strokeStyle = '#3fbf7f';
+    octx.lineWidth = lw * 1.4;
+    octx.setLineDash([4 / z, 3 / z]);
+    octx.strokeRect(Math.min(dragRect.x0, dragRect.x1), Math.min(dragRect.y0, dragRect.y1),
+      Math.abs(dragRect.x1 - dragRect.x0), Math.abs(dragRect.y1 - dragRect.y0));
+    octx.setLineDash([]);
+    if (snapGuides.length) {
+      octx.strokeStyle = 'rgba(63,191,127,.7)'; octx.lineWidth = lw; octx.setLineDash([3 / z, 3 / z]);
+      for (const guide of snapGuides) {
+        octx.beginPath();
+        if (guide.axis === 'x') { octx.moveTo(guide.value, 0); octx.lineTo(guide.value, S.H); }
+        else { octx.moveTo(0, guide.value); octx.lineTo(S.W, guide.value); }
+        octx.stroke();
+      }
+      octx.setLineDash([]);
+    }
+  }
+}
+
+/* ---------------- apply / history ---------------- */
+/* History model: history[0] is the original image; every apply() pushes the
+   state AFTER the edit, so undo walks back through applied states and redo
+   can restore them. */
+function pushHistory() {
+  S.history = S.history.slice(0, S.hIndex + 1);
+  S.history.push(mctx.getImageData(0, 0, S.W, S.H));
+  if (S.history.length > 12) S.history.shift();
+  S.hIndex = S.history.length - 1;
+  $('btnUndo').disabled = S.hIndex <= 0;
+  $('btnRedo').disabled = true;
+}
+function refreshAfterHistory() {
+  S.imgData = mctx.getImageData(0, 0, S.W, S.H);
+  if (S.sel >= 0) analyzeSelection(true);
+  draw();
+}
+function undo() {
+  if (S.hIndex <= 0) return;
+  S.hIndex--;
+  mctx.putImageData(S.history[S.hIndex], 0, 0);
+  $('btnUndo').disabled = S.hIndex <= 0;
+  $('btnRedo').disabled = false;
+  refreshAfterHistory();
+}
+function redo() {
+  if (S.hIndex >= S.history.length - 1) return;
+  S.hIndex++;
+  mctx.putImageData(S.history[S.hIndex], 0, 0);
+  $('btnUndo').disabled = false;
+  $('btnRedo').disabled = S.hIndex >= S.history.length - 1;
+  refreshAfterHistory();
+}
+
+function apply() {
+  if (S.compare) toggleCompare();
+  const indexes = selectedIndexes();
+  if (!indexes.length || !S.newText) { toast('Select a region and type a replacement first', true); return; }
+  const primary = S.sel;
+  let applied = 0;
+  for (const index of indexes) {
+    S.sel = index; analyzeSelection(true);
+    const p = computePlacement();
+    if (!p) continue;
+    mctx.save(); mctx.globalAlpha = S.opacity;
+    mctx.fillStyle = rgbStr(S.bgCol);
+    mctx.fillRect(p.erase.x, p.erase.y, p.erase.x2 - p.erase.x, p.erase.y2 - p.erase.y);
+    drawRotated(mctx, p.canvas, p.x, p.y, p.rotation, (p.erase.x + p.erase.x2) / 2, (p.erase.y + p.erase.y2) / 2);
+    mctx.restore(); applied++;
+  }
+  S.sel = primary; analyzeSelection(true);
+  if (!applied) { toast('No selected region could be rendered', true); return; }
+  pushHistory();                      // snapshot the state AFTER the edit
+  S.imgData = mctx.getImageData(0, 0, S.W, S.H);
+  // chain edits: new text becomes current
+  S.curText = S.newText; S.newText = '';
+  if (S.sel >= 0) analyzeSelection(true);
+  updateSidebar();
+  draw();
+  toast('Edit applied - Save PNG when happy, or keep editing');
+}
+
+function applyTool() {
+  if (S.compare) toggleCompare();
+  const indexes = selectedIndexes();
+  if (!indexes.length) { toast('Drag over an area first', true); return; }
+  if (S.tool === 'image' && !S.replaceImg) { toast('Choose a replacement image first', true); return; }
+  for (const index of indexes) {
+    const b = S.boxes[index];
+    if (S.tool === 'fill' || S.tool === 'erase') fillRotated(mctx, S.tool === 'erase' ? S.bgCol : S.toolColor, b, S.rotation, S.opacity);
+    else {
+      mctx.save(); mctx.globalAlpha = S.opacity;
+      const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+      mctx.translate(cx, cy); mctx.rotate(S.rotation * Math.PI / 180); mctx.translate(-cx, -cy);
+      drawImageCover(mctx, S.replaceImg, b); mctx.restore();
+    }
+  }
+  pushHistory();
+  S.imgData = mctx.getImageData(0, 0, S.W, S.H);
+  const b = S.boxes[S.sel];
+  if (S.sel >= 0 && !analyzeSelection(true) && b) {
+    S.selInk = { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, w: b.x1 - b.x0, h: b.y1 - b.y0 };
+  }
+  updateSidebar(); draw();
+  toast('Canvas edit applied');
+}
+
+/* ---------------- export ---------------- */
+function exportImage(type) {
+  cv.toBlob(b => {
+    if (!b) { toast('Export failed', true); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = S.name + '-edited.' + (type === 'image/jpeg' ? 'jpg' : 'png');
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  }, type, type === 'image/jpeg' ? 0.95 : undefined);
+}
+
+function deleteSelection() {
+  const indexes = selectedIndexes().sort((a, b) => b - a);
+  if (!indexes.length) return;
+  for (const index of indexes) S.boxes.splice(index, 1);
+  S.sel = S.boxes.length ? Math.min(indexes[indexes.length - 1], S.boxes.length - 1) : -1;
+  S.selSet = S.sel >= 0 ? [S.sel] : [];
+  S.selInk = null;
+  if (S.sel >= 0) analyzeSelection(false);
+  updateSidebar(); draw();
+  toast('Layer deleted');
+}
+
+function toggleCompare() {
+  if (!S.img || !S.history.length) return;
+  S.compare = !S.compare;
+  mctx.putImageData(S.history[S.hIndex], 0, 0);
+  $('compareBtn').textContent = S.compare ? 'Hide comparison' : 'Compare original';
+  $('compareRange').disabled = !S.compare;
+  draw();
+}
+
+function savePreset() {
+  const name = prompt('Preset name');
+  if (!name) return;
+  S.presets[name] = { curText: S.curText, newText: S.newText, font: { ...S.font }, size: S.size, textCol: [...S.textCol], bgCol: [...S.bgCol], tool: S.tool, toolColor: [...S.toolColor], opacity: S.opacity, align: S.align, pad: S.pad, dx: S.dx, dy: S.dy, rotation: S.rotation, letterSpacing: S.letterSpacing, lineHeight: S.lineHeight };
+  localStorage.setItem('invoice-editor-presets', JSON.stringify(S.presets));
+  populatePresets(); $('presetSelect').value = name; toast('Preset saved');
+}
+
+function populatePresets() {
+  const select = $('presetSelect');
+  select.innerHTML = '<option value="">Preset...</option>';
+  Object.keys(S.presets).sort().forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; select.appendChild(option); });
+}
+
+function loadPreset() {
+  const name = $('presetSelect').value, preset = S.presets[name];
+  if (!preset) return;
+  Object.assign(S, preset, { font: { ...preset.font }, textCol: [...preset.textCol], bgCol: [...preset.bgCol], toolColor: [...preset.toolColor] });
+  updateSidebar(); draw(); toast('Preset loaded: ' + name);
+}
+
+function queueBatch(files) {
+  S.batchFiles = [...files];
+  $('batchInfo').textContent = S.batchFiles.length ? `${S.batchFiles.length} image${S.batchFiles.length > 1 ? 's' : ''} queued.` : 'No batch images queued.';
+  $('applyBatchBtn').disabled = !S.batchFiles.length;
+}
+
+async function runBatch() {
+  if (!S.batchFiles.length || !S.img) return;
+  const indexes = selectedIndexes();
+  if (!indexes.length) { toast('Select at least one layer first', true); return; }
+  const primary = S.sel;
+  const textPlacements = [];
+  if (S.newText) {
+    for (const index of indexes) { S.sel = index; analyzeSelection(true); const placement = computePlacement(); if (placement) textPlacements.push(placement); }
+    S.sel = primary; analyzeSelection(true);
+  }
+  $('applyBatchBtn').disabled = true;
+  for (let n = 0; n < S.batchFiles.length; n++) {
+    const file = S.batchFiles[n];
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = url; });
+    URL.revokeObjectURL(url);
+    const out = document.createElement('canvas'); out.width = img.width; out.height = img.height;
+    const ctx = out.getContext('2d'); ctx.drawImage(img, 0, 0);
+    for (const p of textPlacements) {
+      ctx.save(); ctx.globalAlpha = S.opacity;
+      ctx.fillStyle = rgbStr(S.bgCol); ctx.fillRect(p.erase.x, p.erase.y, p.erase.x2 - p.erase.x, p.erase.y2 - p.erase.y);
+      drawRotated(ctx, p.canvas, p.x, p.y, p.rotation, (p.erase.x + p.erase.x2) / 2, (p.erase.y + p.erase.y2) / 2);
+      ctx.restore();
+    }
+    for (const index of indexes) {
+      const box = S.boxes[index];
+      if (S.tool === 'fill' || S.tool === 'erase') fillRotated(ctx, S.tool === 'erase' ? S.bgCol : S.toolColor, box, S.rotation, S.opacity);
+      else if (S.tool === 'image' && S.replaceImg) { ctx.save(); ctx.globalAlpha = S.opacity; drawImageCover(ctx, S.replaceImg, box); ctx.restore(); }
+    }
+    const blob = await new Promise(resolve => out.toBlob(resolve, 'image/png'));
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = file.name.replace(/\.[^.]+$/, '') + '-edited.png'; link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 3000);
+    $('batchInfo').textContent = `Exported ${n + 1}/${S.batchFiles.length}`;
+  }
+  $('applyBatchBtn').disabled = false; toast('Batch complete');
+}
+
+function exportJSON() {
+  if (!S.img) return;
+  const data = {
+    version: 1,
+    image: { name: S.name, width: S.W, height: S.H },
+    boxes: S.boxes.map((b, index) => ({ index, x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, type: b.type || 'manual', text: b.text || '', confidence: b.confidence || 0, density: b.density, visible: b.visible !== false })),
+    selection: S.sel,
+    settings: { tool: S.tool, opacity: S.opacity, rotation: S.rotation, letterSpacing: S.letterSpacing, lineHeight: S.lineHeight, toolColor: [...S.toolColor], textColor: [...S.textCol], backgroundColor: [...S.bgCol] },
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = S.name + '-edits.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+
+/* ---------------- sidebar sync ---------------- */
+function updateSidebar() {
+  const on = S.sel >= 0 && !!S.selInk;
+  const textOn = on && (!S.boxes[S.sel].type || S.boxes[S.sel].type === 'text');
+  $('stepTools').classList.toggle('off', !on);
+  for (const id of ['step2', 'step3', 'step4', 'step5', 'step6'])
+    $(id).classList.toggle('off', !textOn);
+  $('applyBtn').disabled = !(textOn && S.newText);
+  $('applyToolBtn').disabled = !(on && (S.tool !== 'image' || S.replaceImg));
+  $('deleteBtn').disabled = !S.selSet.length;
+  $('opacityRange').value = Math.round(S.opacity * 100);
+  $('opacityVal').textContent = Math.round(S.opacity * 100) + '%';
+  $('multiSelect').checked = S.multiSelect;
+  $('snapToggle').checked = S.snap;
+  $('compareRange').value = S.comparePos;
+  $('compareVal').textContent = S.comparePos + '%';
+  $('rotationRange').value = S.rotation; $('rotationVal').textContent = S.rotation + '°';
+  $('letterSpacing').value = S.letterSpacing; $('lineHeight').value = S.lineHeight;
+  const list = $('layerList'); list.textContent = '';
+  if (!S.boxes.length) {
+    list.innerHTML = '<div class="layer-empty">No layers yet. Detect or draw a region.</div>';
+  } else S.boxes.forEach((b, i) => {
+    const row = document.createElement('div'); row.className = 'layer-row' + (S.selSet.includes(i) ? ' selected' : '');
+    const visibility = document.createElement('input'); visibility.type = 'checkbox'; visibility.checked = b.visible !== false; visibility.title = 'Toggle visibility';
+    visibility.onchange = () => { b.visible = visibility.checked; draw(); };
+    const label = b.type === 'text' ? (b.text || 'Text') : (b.type || 'Manual');
+    const pick = document.createElement('button'); pick.className = 'layer-pick'; pick.textContent = `${label} ${i + 1} - ${Math.round(b.x1 - b.x0)} x ${Math.round(b.y1 - b.y0)}`;
+    pick.onclick = e => { if (S.multiSelect && e.shiftKey) toggleSelection(i); else setSelection(i); };
+    row.append(visibility, pick); list.appendChild(row);
+  });
+  $('toolColor').value = toHex(S.toolColor);
+  $('toolColorV').textContent = toHex(S.toolColor).toUpperCase();
+  $('fillControls').hidden = S.tool !== 'fill';
+  $('imageControls').hidden = S.tool !== 'image';
+  if (S.tool === 'image' && S.replaceImg) $('replaceInfo').textContent = 'Replacement ready: ' + S.replaceImg.width + ' x ' + S.replaceImg.height;
+  if (on) {
+    const ink = S.selInk;
+    $('fFamily').value = S.font.family;
+    $('fWeight').value = String(S.font.weight);
+    $('fSize').value = String(S.size);
+    $('fItalic').checked = !!S.font.italic;
+    $('colText').value = toHex(S.textCol);
+    $('colBg').value = toHex(S.bgCol);
+    $('colTextV').textContent = toHex(S.textCol).toUpperCase();
+    $('colBgV').textContent = toHex(S.bgCol).toUpperCase();
+    for (const b of $('alignSeg').children) b.classList.toggle('on', b.dataset.align === S.align);
+    $('padRange').value = S.pad; $('padVal').textContent = S.pad + 'px';
+    $('dxRange').value = S.dx; $('dxVal').textContent = S.dx + 'px';
+    $('dyRange').value = S.dy; $('dyVal').textContent = S.dy + 'px';
+  }
+}
+
+/* ---------------- pointer interaction ---------------- */
+let dragStart = null, dragRect = null, snapGuides = [];
+function evtImg(e) {
+  const r = ov.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / S.zoom, y: (e.clientY - r.top) / S.zoom };
+}
+ov.addEventListener('pointerdown', e => {
+  if (!S.img) return;
+  ov.setPointerCapture(e.pointerId);
+  dragStart = evtImg(e); dragRect = null; snapGuides = [];
+});
+ov.addEventListener('pointermove', e => {
+  if (!dragStart) return;
+  let p = evtImg(e);
+  if (S.snap) {
+    const snap = (value, axis) => {
+      const values = axis === 'x' ? [0, S.W, ...S.boxes.flatMap(b => [b.x0, b.x1])] : [0, S.H, ...S.boxes.flatMap(b => [b.y0, b.y1])];
+      const nearest = values.reduce((best, value2) => Math.abs(value2 - value) < Math.abs(best - value) ? value2 : best, value);
+      if (Math.abs(nearest - value) <= 8) { snapGuides.push({ axis, value: nearest }); return nearest; }
+      return value;
+    };
+    snapGuides = [];
+    p = { x: snap(p.x, 'x'), y: snap(p.y, 'y') };
+  }
+  if (Math.abs(p.x - dragStart.x) * S.zoom > 3 || Math.abs(p.y - dragStart.y) * S.zoom > 3)
+    dragRect = { x0: dragStart.x, y0: dragStart.y, x1: p.x, y1: p.y };
+  draw();
+});
+ov.addEventListener('pointerup', e => {
+  if (!dragStart) return;
+  const p = evtImg(e);
+  if (dragRect) {
+    const x0 = clamp(Math.round(Math.min(dragRect.x0, dragRect.x1)), 0, S.W);
+    const y0 = clamp(Math.round(Math.min(dragRect.y0, dragRect.y1)), 0, S.H);
+    const x1 = clamp(Math.round(Math.max(dragRect.x0, dragRect.x1)), 0, S.W);
+    const y1 = clamp(Math.round(Math.max(dragRect.y0, dragRect.y1)), 0, S.H);
+    dragStart = null; dragRect = null; snapGuides = [];
+    if (x1 - x0 >= 5 && y1 - y0 >= 5) {
+      S.boxes.push({ x0, y0, x1, y1, density: 0, visible: true });
+      S.sel = S.boxes.length - 1;
+      S.selSet = [S.sel];
+      S.matchInfo = null; S.ranking = [];
+      const ok = analyzeSelection(false);
+      if (!ok) {
+        S.selInk = { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
+        toast('Area selected - canvas tools are ready');
+      }
+      updateSidebar(); draw();
+      if (ok) $('curText').focus();
+    } else draw();
+    return;
+  }
+  // click -> pick smallest box containing point
+  dragStart = null;
+  const hit = [];
+  for (let i = 0; i < S.boxes.length; i++) {
+    const b = S.boxes[i];
+    if (b.visible === false) continue;
+    if (p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1) hit.push(i);
+  }
+  if (hit.length) {
+    let best = hit[0], ba = Infinity;
+    for (const i of hit) {
+      const b = S.boxes[i], a = (b.x1 - b.x0) * (b.y1 - b.y0);
+      if (a < ba) { ba = a; best = i; }
+    }
+    if (S.multiSelect && e.shiftKey) toggleSelection(best); else setSelection(best);
+    $('curText').focus();
+  } else setSelection(-1);
+});
+
+/* ---------------- events ---------------- */
+$('btnOpen').onclick = () => $('fileInput').click();
+$('fileInput').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); e.target.value = ''; };
+$('btnDemo').onclick = loadDemo;
+$('btnUndo').onclick = undo;
+$('btnRedo').onclick = redo;
+$('btnZoomIn').onclick = () => setZoom(S.zoom * 1.4);
+$('btnZoomOut').onclick = () => setZoom(S.zoom / 1.4);
+$('btnFit').onclick = fitZoom;
+$('btn100').onclick = () => setZoom(1);
+$('btnExport').onclick = () => exportImage('image/png');
+$('btnExportJ').onclick = () => exportImage('image/jpeg');
+$('compareBtn').onclick = toggleCompare;
+$('exportJsonBtn').onclick = exportJSON;
+$('deleteBtn').onclick = deleteSelection;
+$('multiSelect').onchange = e => { S.multiSelect = e.target.checked; if (!S.multiSelect && S.sel >= 0) setSelection(S.sel); else updateSidebar(); draw(); };
+$('snapToggle').onchange = e => { S.snap = e.target.checked; };
+$('compareRange').oninput = e => { S.comparePos = +e.target.value; $('compareVal').textContent = e.target.value + '%'; draw(); };
+$('savePresetBtn').onclick = savePreset;
+$('loadPresetBtn').onclick = loadPreset;
+$('batchBtn').onclick = () => $('batchInput').click();
+$('batchInput').onchange = e => { queueBatch(e.target.files); e.target.value = ''; };
+$('applyBatchBtn').onclick = runBatch;
+$('detBtn').onclick = async () => { const n = await detect(); if (n) toast(n + ' regions found'); };
+
+$('curText').addEventListener('input', e => {
+  S.curText = e.target.value;
+  S.matchInfo = null; S.ranking = [];
+  autoAlignDefault();
+  for (const b of $('alignSeg').children) b.classList.toggle('on', b.dataset.align === S.align);
+  draw();
+});
+$('newText').addEventListener('input', e => {
+  S.newText = e.target.value;
+  $('applyBtn').disabled = !(S.sel >= 0 && S.selInk && S.newText);
+  draw();
+});
+$('matchBtn').onclick = autoMatch;
+$('fFamily').onchange = e => { S.font.family = e.target.value; S.matchInfo = null; draw(); };
+$('fWeight').onchange = e => { S.font.weight = +e.target.value; S.matchInfo = null; draw(); };
+$('fItalic').onchange = e => { S.font.italic = e.target.checked; S.matchInfo = null; draw(); };
+$('letterSpacing').oninput = e => { S.letterSpacing = +e.target.value || 0; S.matchInfo = null; draw(); };
+$('lineHeight').oninput = e => { S.lineHeight = clamp(+e.target.value || 1.2, 0.8, 3); draw(); };
+$('fSize').oninput = e => { const v = parseFloat(e.target.value); if (v >= 4 && v <= 500) { S.size = v; draw(); } };
+$('colText').oninput = e => { S.textCol = fromHex(e.target.value); $('colTextV').textContent = e.target.value.toUpperCase(); draw(); };
+$('colBg').oninput = e => { S.bgCol = fromHex(e.target.value); $('colBgV').textContent = e.target.value.toUpperCase(); draw(); };
+$('toolColor').oninput = e => { S.toolColor = fromHex(e.target.value); $('toolColorV').textContent = e.target.value.toUpperCase(); draw(); };
+$('opacityRange').oninput = e => { S.opacity = +e.target.value / 100; $('opacityVal').textContent = e.target.value + '%'; draw(); };
+$('chooseReplace').onclick = () => $('replaceInput').click();
+$('replaceInput').onchange = e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { S.replaceImg = img; updateSidebar(); draw(); toast('Replacement image ready'); URL.revokeObjectURL(url); };
+  img.onerror = () => { toast('Could not read that replacement image', true); URL.revokeObjectURL(url); };
+  img.src = url;
+};
+for (const b of $('toolSeg').children) b.onclick = () => {
+  S.tool = b.dataset.tool;
+  for (const s of $('toolSeg').children) s.classList.toggle('on', s === b);
+  updateSidebar(); draw();
+};
+$('applyToolBtn').onclick = applyTool;
+$('resampleBtn').onclick = () => { if (S.sel >= 0) { analyzeSelection(false); updateSidebar(); draw(); } };
+for (const b of $('alignSeg').children) b.onclick = () => {
+  S.align = b.dataset.align; S.alignTouched = true;
+  for (const s of $('alignSeg').children) s.classList.toggle('on', s === b);
+  draw();
+};
+$('padRange').oninput = e => { S.pad = +e.target.value; $('padVal').textContent = S.pad + 'px'; draw(); };
+$('dxRange').oninput = e => { S.dx = +e.target.value; $('dxVal').textContent = S.dx + 'px'; draw(); };
+$('dyRange').oninput = e => { S.dy = +e.target.value; $('dyVal').textContent = S.dy + 'px'; draw(); };
+$('rotationRange').oninput = e => { S.rotation = +e.target.value; $('rotationVal').textContent = e.target.value + '°'; draw(); };
+$('applyBtn').onclick = apply;
+
+window.addEventListener('keydown', e => {
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  if (!mod && (e.key === 'Delete' || e.key === 'Backspace') && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+    e.preventDefault(); deleteSelection();
+  }
+});
+window.addEventListener('paste', e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) if (it.type.startsWith('image/')) { loadFile(it.getAsFile()); break; }
+});
+['dragenter', 'dragover'].forEach(ev => stagewrap.addEventListener(ev, e => { e.preventDefault(); stagewrap.classList.add('dropping'); }));
+['dragleave', 'drop'].forEach(ev => stagewrap.addEventListener(ev, e => { e.preventDefault(); stagewrap.classList.remove('dropping'); }));
+stagewrap.addEventListener('drop', e => {
+  const f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+window.addEventListener('resize', () => { if (S.img && S.zoom !== 1) fitZoom(); });
+
+/* populate manual font list */
+(function () {
+  try { S.presets = JSON.parse(localStorage.getItem('invoice-editor-presets') || '{}'); } catch (_) { S.presets = {}; }
+  const sel = $('fFamily');
+  for (const fam of MANUAL_FAMILIES) {
+    const o = document.createElement('option');
+    o.value = fam; o.textContent = fam;
+    sel.appendChild(o);
+  }
+  populatePresets();
+})();
+
+/* ---------------- debug / automation api ---------------- */
+window.ts = {
+  S,
+  detect, loadDemo, setSelection, autoMatch, apply, undo, redo, setZoom,
+  boxes: () => S.boxes.map(b => ({ ...b })),
+  ink: () => S.selInk ? { ...S.selInk, gray: undefined, mask: undefined } : null,
+  place: computePlacement,
+  render: renderPipeline,
+  set: o => { Object.assign(S, o); updateSidebar(); draw(); },
+  exportPNG: () => exportImage('image/png'),
+};
+</script>
+</body>
+</html>
